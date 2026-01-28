@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cloud Notepad (GitHub Storage)</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    input {
+      width: 300px;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 350px;
+      margin-top: 10px;
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Cloud Notepad (GitHub)</h2>
+
+  <label><strong>File Name:</strong></label><br>
+  <input type="text" id="filename" placeholder="notes.txt">
+
+  <br><br>
+
+  <button onclick="loadFile()">Load File</button>
+  <button onclick="saveFile()">Save File</button>
+  <button onclick="clearText()">Clear Text</button>
+
+  <textarea id="editor" placeholder="Write your text here..."></textarea>
+
+  <div id="status"></div>
+
+  <script>
+    /************** CONFIGURATION **************/
+    const GITHUB_TOKEN = "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";
+    const OWNER = "Steph3n111";
+    const REPO = "GitHub-File-Manager";
+    const BRANCH = "main";
+    /*****************************************/
+
+    const editor = document.getElementById("editor");
+    const statusBox = document.getElementById("status");
+
+    function setStatus(message, success = true) {
+      statusBox.style.color = success ? "green" : "red";
+      statusBox.textContent = message;
+    }
+
+    function encodeBase64(text) {
+      return btoa(unescape(encodeURIComponent(text)));
+    }
+
+    function decodeBase64(base64) {
+      return decodeURIComponent(escape(atob(base64)));
+    }
+
+    async function loadFile() {
+      const filename = document.getElementById("filename").value.trim();
+      if (!filename) {
+        setStatus("Please enter a file name.", false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.github.com/repos/${OWNER}/${REPO}/contents/${filename}?ref=${BRANCH}`,
+          {
+            headers: {
+              Authorization: `token ${GITHUB_TOKEN}`,
+              Accept: "application/vnd.github.v3+json"
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("File not found or access denied.");
+        }
+
+        const data = await response.json();
+        editor.value = decodeBase64(data.content);
+        editor.dataset.sha = data.sha;
+
+        setStatus("File loaded successfully.");
+      } catch (error) {
+        editor.value = "";
+        editor.dataset.sha = "";
+        setStatus(error.message, false);
+      }
+    }
+
+    async function saveFile() {
+      const filename = document.getElementById("filename").value.trim();
+      if (!filename) {
+        setStatus("Please enter a file name.", false);
+        return;
+      }
+
+      const body = {
+        message: `Update ${filename}`,
+        content: encodeBase64(editor.value),
+        branch: BRANCH
+      };
+
+      if (editor.dataset.sha) {
+        body.sha = editor.dataset.sha;
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.github.com/repos/${OWNER}/${REPO}/contents/${filename}`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `token ${GITHUB_TOKEN}`,
+              Accept: "application/vnd.github.v3+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to save file.");
+        }
+
+        const data = await response.json();
+        editor.dataset.sha = data.content.sha;
+
+        setStatus("File saved successfully.");
+      } catch (error) {
+        setStatus(error.message, false);
+      }
+    }
+
+    function clearText() {
+      editor.value = "";
+      setStatus("Text cleared.");
+    }
+  </script>
+
+</body>
+</html>
